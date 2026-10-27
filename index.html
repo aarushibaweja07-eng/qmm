@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BOM Alternate Priority Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --ink: #1a2027;
+    --muted: #64707b;
+    --line: #dde3e8;
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --primary: #0a4d68;
+    --primary-dark: #073852;
+    --accent: #1c8ba0;
+    --flag-bg: #fdecec;
+    --flag-text: #b3413a;
+    --warn-bg: #fff3e0;
+    --warn-text: #a6640a;
+    --main-bg: #eaf3f7;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    max-width: 1220px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+    color: var(--ink);
+    background: var(--bg);
+  }
+  h1 { font-size: 21px; margin: 0 0 4px; font-weight: 700; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 2px rgba(20,30,40,0.04);
+  }
+  .card h2 { font-size: 14px; margin: 0 0 12px; color: var(--ink); }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .between { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  button {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+  button:hover { background: var(--primary-dark); }
+  button:disabled { background: #b7c0c7; cursor: not-allowed; }
+  button.secondary { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+  button.secondary:hover { background: #eef6f8; }
+  button.danger { background: #fff; color: var(--flag-text); border: 1px solid var(--flag-text); }
+  button.danger:hover { background: var(--flag-bg); }
+  button.small { padding: 4px 10px; font-size: 11.5px; }
+
+  input[type=file] { display: none; }
+  label.filebtn {
+    display: inline-block;
+    background: #fff;
+    color: var(--primary);
+    border: 1px solid var(--primary);
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  label.filebtn:hover { background: #eef6f8; }
+  label.filebtn.small { padding: 4px 10px; font-size: 11.5px; }
+
+  select {
+    padding: 7px 10px;
+    font-size: 12.5px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+  }
+
+  .empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+    font-size: 13.5px;
+  }
+
+  table.filelist { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.filelist th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  table.filelist td { padding: 9px 8px; border-bottom: 1px solid #eef1f3; vertical-align: middle; }
+  table.filelist tr:last-child td { border-bottom: none; }
+  .model-name { font-weight: 700; }
+  .model-meta { color: var(--muted); font-size: 11.5px; }
+  .actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+  .stat-strip { display: flex; gap: 28px; flex-wrap: wrap; }
+  .stat { font-size: 12.5px; color: var(--muted); }
+  .stat b { display: block; font-size: 20px; color: var(--primary); font-weight: 800; }
+
+  #results, #reqResults { max-height: 620px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+  table.result { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  table.result th {
+    background: var(--primary);
+    color: #fff;
+    position: sticky;
+    top: 0;
+    text-align: left;
+    padding: 8px 10px;
+    font-weight: 600;
+    z-index: 1;
+  }
+  table.result td { padding: 6px 10px; border-bottom: 1px solid #eef1f3; vertical-align: top; }
+  table.result tr.main-row { background: var(--main-bg); font-weight: 700; }
+  table.result tr.flag { background: var(--flag-bg); }
+  table.result tr.warn { background: var(--warn-bg); }
+  .flagtxt { color: var(--flag-text); font-weight: 700; }
+  .warntxt { color: var(--warn-text); font-weight: 700; }
+  .stockval { font-variant-numeric: tabular-nums; }
+  .stockval.zero { color: var(--flag-text); font-weight: 700; }
+
+  .status { font-size: 12.5px; margin-top: 8px; }
+  .status.err { color: var(--flag-text); }
+  .status.ok { color: var(--accent); }
+  .toast {
+    position: fixed; bottom: 20px; right: 20px;
+    background: var(--primary-dark); color: #fff;
+    padding: 10px 16px; border-radius: 6px; font-size: 12.5px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  input[type=number] {
+    width: 90px; padding: 7px 10px; font-size: 12.5px;
+    border: 1px solid var(--line); border-radius: 6px; color: var(--ink);
+  }
+  .qtylabel { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+  table.result td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.result th.num { text-align: right; }
+  table.result tr.used-red { background: var(--flag-bg); }
+  table.result tr.used-red td.req { color: var(--flag-text); font-weight: 800; }
+  table.result td.short { color: var(--flag-text); font-weight: 800; background: #fbd5d2; }
+  table.result td.dim { color: #9aa5ae; }
+  table.result td.needed { font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>BOM Alternate Part Priority Tool</h1>
+<div class="sub">Upload BOM files once — they stay saved here. Add new models or replace an existing one any time.</div>
+
+<div class="card">
+  <div class="between">
+    <h2 style="margin:0;">Uploaded BOMs</h2>
+    <label class="filebtn" for="addInput">+ Add BOM file(s)</label>
+    <input type="file" id="addInput" multiple accept=".xlsx">
+  </div>
+  <div id="fileListWrap"></div>
+  <div id="uploadStatus" class="status"></div>
+</div>
+
+<div class="card">
+  <div class="between">
+    <h2 style="margin:0;">Stock Data</h2>
+    <label class="filebtn" for="stockInput" id="stockLabel">+ Upload stock master</label>
+    <input type="file" id="stockInput" accept=".xlsx">
+  </div>
+  <div class="sub" style="margin:6px 0 0;">Matches parts by OEL Partcode and pulls in current balance quantity. Used to flag zero-stock Main parts and to prefer alternates with stock on hand.</div>
+  <div id="stockInfo"></div>
+  <div id="stockStatus" class="status"></div>
+</div>
+
+<div class="card" id="summaryBox" style="display:none;">
+  <div class="stat-strip" id="stats"></div>
+</div>
+
+<div class="card" id="rankingBox" style="display:none;">
+  <div class="between">
+    <h2 style="margin:0;">BOM Requirement — Priority-Ranked, by Model</h2>
+    <div class="row">
+      <select id="modelSelect"></select>
+      <label class="qtylabel" for="buildQty">Build qty</label>
+      <input type="number" id="buildQty" min="0" step="any" value="1">
+      <button id="exportBtn" class="secondary">Export CSV (original format)</button>
+    </div>
+  </div>
+  <div id="allocSummary" class="status"></div>
+  <div id="results" style="margin-top:12px;"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let filesData = {};   // model -> { headerLabels, colMap, rows: [{group, sr, raw, oel, odm, role, pname, desc}] }
+let allRows = [];
+let mainModels = {};
+let stockMap = {};    // oel -> { balance, location, remark }
+let stockMeta = null; // { fileName, count }
+
+const STORAGE_PREFIX = 'bomdata:';
+const STOCK_KEY = 'stockdata:main';
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+function setStatus(msg, kind) {
+  const el = document.getElementById('uploadStatus');
+  el.textContent = msg;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+function setStockStatus(msg, kind) {
+  const el = document.getElementById('stockStatus');
+  el.textContent = msg;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+// ---------- shared helpers ----------
+function colIndex(headerRow, matchers) {
+  for (let c = 0; c < headerRow.length; c++) {
+    const v = (headerRow[c] || '').toString().trim().toLowerCase();
+    if (matchers.every(m => v.includes(m))) return c;
+  }
+  return -1;
+}
+function ensureColumn(headerLabels, matchers, properName) {
+  for (let i = 0; i < headerLabels.length; i++) {
+    const v = headerLabels[i].toLowerCase();
+    if (matchers.every(m => v.includes(m))) return i;
+  }
+  headerLabels.push(properName);
+  return headerLabels.length - 1;
+}
+function csvEscape(v) {
+  return '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"';
+}
+function stockOf(oel) {
+  const s = stockMap[oel];
+  return s ? s.balance : undefined;
+}
+function isZeroStock(oel) {
+  const b = stockOf(oel);
+  return typeof b === 'number' && b <= 0;
+}
+
+// ---------- BOM parsing ----------
+function findHeaderRow(sheetRows) {
+  for (let r = 0; r < Math.min(sheetRows.length, 15); r++) {
+    const row = sheetRows[r] || [];
+    for (let c = 0; c < row.length; c++) {
+      const v = (row[c] || '').toString().trim().toLowerCase();
+      if (v.includes('main') && v.includes('alt')) return { rowIdx: r, row };
+    }
+  }
+  return null;
+}
+function findModelName(sheetRows, fallback) {
+  for (let r = 0; r < Math.min(sheetRows.length, 10); r++) {
+    const row = sheetRows[r] || [];
+    for (let c = 0; c < row.length; c++) {
+      const v = (row[c] || '').toString().trim().toLowerCase();
+      if (v === 'model name:') return (row[c + 1] || fallback).toString().trim();
+    }
+  }
+  return fallback;
+}
+function parseWorkbook(wb, fallbackName) {
+  const sheetName = wb.SheetNames.find(n => n.trim() === 'BOM-Complete') ||
+                     wb.SheetNames.find(n => n.includes('BOM-Complete') && !n.match(/smt|pack/i));
+  if (!sheetName) throw new Error('No "BOM-Complete" sheet found');
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+  const hdr = findHeaderRow(rows);
+  if (!hdr) throw new Error('Header row (Main /Alt column) not found');
+  const headerRow = hdr.row;
+  const headerLabels = headerRow.map(v => (v || '').toString().trim());
+  const width = headerLabels.length;
+
+  const colMap = {
+    sr: colIndex(headerRow, ['sr']),
+    oel: colIndex(headerRow, ['oel']),
+    odm: colIndex(headerRow, ['odm']),
+    role: colIndex(headerRow, ['main']),
+    name: colIndex(headerRow, ['part name']),
+    desc: colIndex(headerRow, ['description']),
+    remarks: colIndex(headerRow, ['remarks'])
+  };
+
+  const model = findModelName(rows, fallbackName);
+  const items = [];
+  for (let r = hdr.rowIdx + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const oel = (row[colMap.oel] || '').toString().trim();
+    if (!oel) continue;
+    const raw = [];
+    for (let c = 0; c < width; c++) raw.push(row[c] !== undefined ? row[c] : '');
+    const sr = (row[colMap.sr] || '').toString().trim();
+    items.push({
+      group: sr ? Math.floor(parseFloat(sr)) : null,
+      sr, raw, oel,
+      odm: (row[colMap.odm] || '').toString().trim(),
+      role: (row[colMap.role] || '').toString().trim(),
+      pname: (row[colMap.name] || '').toString().trim(),
+      desc: (row[colMap.desc] || '').toString().trim()
+    });
+  }
+  if (!items.length) throw new Error('No part rows found under the header');
+  return { model, headerLabels, colMap, rows: items };
+}
+
+// ---------- stock parsing ----------
+function findStockHeaderRow(sheetRows) {
+  for (let r = 0; r < Math.min(sheetRows.length, 15); r++) {
+    const row = sheetRows[r] || [];
+    for (let c = 0; c < row.length; c++) {
+      const v = (row[c] || '').toString().trim().toLowerCase();
+      if (v.includes('oel')) return { rowIdx: r, row };
+    }
+  }
+  return null;
+}
+function parseStockWorkbook(wb) {
+  const sheetName = wb.SheetNames.find(n => n.trim().toLowerCase() === 'summary') || wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  const hdr = findStockHeaderRow(rows);
+  if (!hdr) throw new Error('No "OEL Partcode" column found in stock file');
+  const headerRow = hdr.row;
+  const oelCol = colIndex(headerRow, ['oel']);
+  const balCol = colIndex(headerRow, ['balance']);
+  const locCol = colIndex(headerRow, ['location']);
+  const remCol = colIndex(headerRow, ['remark']);
+  if (balCol < 0) throw new Error('No "Balance qty" column found in stock file');
+
+  const map = {};
+  let count = 0;
+  for (let r = hdr.rowIdx + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const oel = (row[oelCol] || '').toString().trim();
+    if (!oel) continue;
+    const balRaw = row[balCol];
+    const balance = typeof balRaw === 'number' ? balRaw : parseFloat(balRaw);
+    map[oel] = {
+      balance: isNaN(balance) ? null : balance,
+      location: locCol >= 0 ? (row[locCol] || '').toString().trim() : '',
+      remark: remCol >= 0 ? (row[remCol] || '').toString().trim() : ''
+    };
+    count++;
+  }
+  return { map, count };
+}
+
+// ---------- storage (browser localStorage — persists per browser, on this machine, for this file) ----------
+function lsAvailable() {
+  try {
+    const t = '__ls_test__';
+    localStorage.setItem(t, '1');
+    localStorage.removeItem(t);
+    return true;
+  } catch (e) { return false; }
+}
+const LS_OK = lsAvailable();
+
+async function saveModel(entry) {
+  if (!LS_OK) return false;
+  try { localStorage.setItem(STORAGE_PREFIX + entry.model, JSON.stringify(entry)); return true; }
+  catch (e) { console.error('storage set failed', e); return false; }
+}
+async function deleteModel(model) {
+  if (!LS_OK) return false;
+  try { localStorage.removeItem(STORAGE_PREFIX + model); return true; }
+  catch (e) { console.error('storage delete failed', e); return false; }
+}
+async function loadAllFromStorage() {
+  if (!LS_OK) {
+    setStatus('This browser is blocking local storage (private/incognito mode?) — files will only last this session.', 'err');
+    return;
+  }
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(STORAGE_PREFIX)) continue;
+      try {
+        const value = localStorage.getItem(key);
+        if (value) { const entry = JSON.parse(value); filesData[entry.model] = entry; }
+      } catch (e) { /* skip corrupt entry */ }
+    }
+  } catch (e) {
+    console.error('storage list failed', e);
+    setStatus('Could not load saved BOMs. Uploads this session will still work.', 'err');
+  }
+}
+async function saveStock(fileName, map, count) {
+  if (!LS_OK) return false;
+  try {
+    localStorage.setItem(STOCK_KEY, JSON.stringify({ fileName, map, count }));
+    return true;
+  } catch (e) { console.error('stock storage set failed', e); return false; }
+}
+async function loadStockFromStorage() {
+  if (!LS_OK) return;
+  try {
+    const value = localStorage.getItem(STOCK_KEY);
+    if (value) {
+      const parsed = JSON.parse(value);
+      stockMap = parsed.map || {};
+      stockMeta = { fileName: parsed.fileName, count: parsed.count };
+    }
+  } catch (e) { /* no stock saved yet, fine */ }
+}
+async function deleteStock() {
+  if (!LS_OK) return false;
+  try { localStorage.removeItem(STOCK_KEY); return true; }
+  catch (e) { return false; }
+}
+
+// ---------- derived state ----------
+function rebuildDerived() {
+  allRows = [];
+  mainModels = {};
+  Object.values(filesData).forEach(entry => {
+    entry.rows.forEach(it => {
+      allRows.push({ model: entry.model, ...it });
+      if (it.role.toLowerCase() === 'main') {
+        if (!mainModels[it.oel]) mainModels[it.oel] = new Set();
+        mainModels[it.oel].add(entry.model);
+      }
+    });
+  });
+}
+function isMainElsewhere(oel, currentModel) {
+  if (!mainModels[oel]) return [];
+  return [...mainModels[oel]].filter(m => m !== currentModel);
+}
+
+function rankGroupItems(model, groupId) {
+  const items = allRows.filter(r => r.model === model && r.group === groupId);
+  const mainItems = items.filter(i => i.role.toLowerCase() === 'main');
+  const altItems = items.filter(i => i.role.toLowerCase() === 'alt');
+  const otherItems = items.filter(i => !['main', 'alt'].includes(i.role.toLowerCase()));
+
+  altItems.sort((a, b) => {
+    const aElse = isMainElsewhere(a.oel, model);
+    const bElse = isMainElsewhere(b.oel, model);
+    if ((aElse.length > 0) !== (bElse.length > 0)) return aElse.length > 0 ? 1 : -1;
+    if (aElse.length !== bElse.length) return aElse.length - bElse.length;
+    // tie-break on stock: more available stock ranks first
+    const aStock = stockOf(a.oel), bStock = stockOf(b.oel);
+    if (typeof aStock === 'number' && typeof bStock === 'number' && aStock !== bStock) return bStock - aStock;
+    return 0;
+  });
+
+  const ranked = [...mainItems, ...altItems, ...otherItems];
+  return ranked.map((it, idx) => {
+    const elseMains = it.role.toLowerCase() === 'alt' ? isMainElsewhere(it.oel, model) : [];
+    const mainZero = it.role.toLowerCase() === 'main' && isZeroStock(it.oel);
+    return {
+      priority: idx + 1, item: it,
+      flagged: elseMains.length > 0, mainIn: elseMains,
+      stock: stockOf(it.oel), mainZeroStock: mainZero
+    };
+  });
+}
+
+function buildRanking(model) {
+  const groupIds = [...new Set(allRows.filter(r => r.model === model).map(r => r.group))];
+  const out = [];
+  groupIds.sort((a, b) => parseFloat(a) - parseFloat(b)).forEach(g => {
+    rankGroupItems(model, g).forEach(rk => out.push({ group: g, ...rk }));
+  });
+  return out;
+}
+
+
+// ---------- requirement allocation (build qty x QPS, against stock) ----------
+function r3(n) { return Math.round(n * 1000) / 1000; }
+function fmtNum(n) { return (typeof n === 'number' && !isNaN(n)) ? String(r3(n)) : '—'; }
+
+function getBuildQty() {
+  const v = parseFloat(document.getElementById('buildQty').value);
+  return (isNaN(v) || v < 0) ? 0 : v;
+}
+
+function buildAllocation(model, buildQty) {
+  const entry = filesData[model];
+  const qCol = colIndex(entry.headerLabels, ['qps']);
+  const haveStock = !!stockMeta;
+  const groupIds = [...new Set(allRows.filter(r => r.model === model).map(r => r.group))]
+    .sort((a, b) => parseFloat(a) - parseFloat(b));
+
+  const remaining = {}; // oel -> stock left after earlier allocations in this run
+  const availNow = oel => {
+    if (!(oel in remaining)) {
+      const s = stockOf(oel);
+      remaining[oel] = (typeof s === 'number' && s > 0) ? s : 0;
+    }
+    return remaining[oel];
+  };
+
+  const out = [];
+  groupIds.forEach(g => {
+    const ranked = rankGroupItems(model, g);
+
+    // QPS of the requirement: Main's QPS, else the first numeric one in the group
+    let qps = NaN;
+    const mainFirst = [...ranked].sort((a, b) =>
+      (b.item.role.toLowerCase() === 'main') - (a.item.role.toLowerCase() === 'main'));
+    for (const rk of mainFirst) {
+      const v = qCol >= 0 ? parseFloat(rk.item.raw[qCol]) : NaN;
+      if (!isNaN(v)) { qps = v; break; }
+    }
+    const needed = isNaN(qps) ? 0 : r3(qps * buildQty);
+
+    let left = needed;
+    const rows = ranked.map(rk => {
+      const oel = rk.item.oel;
+      let stockNow, alloc = 0;
+      if (haveStock) {
+        stockNow = availNow(oel);
+        alloc = r3(Math.min(stockNow, left));
+        remaining[oel] = r3(stockNow - alloc);
+        left = r3(left - alloc);
+      } else if (rk.item.role.toLowerCase() === 'main') {
+        alloc = needed; // no stock data: ideal requirement sits on Main
+      }
+      return {
+        group: g, ...rk, qps, needed, stockNow, alloc,
+        balance: haveStock ? r3(stockNow - alloc) : undefined,
+        qpsMissing: isNaN(qps)
+      };
+    });
+    rows.forEach((r, i) => {
+      r.isLast = i === rows.length - 1;
+      r.groupShortage = (haveStock && r.isLast) ? Math.max(0, left) : undefined;
+    });
+    out.push(...rows);
+  });
+  return out;
+}
+
+function noteFor(r) {
+  const parts = [];
+  if (r.flagged) parts.push('(Main in: ' + r.mainIn.join(', ') + ')');
+  if (r.mainZeroStock) parts.push('Main at zero stock');
+  if (r.qpsMissing && r.item.role.toLowerCase() === 'main') parts.push('QPS missing in BOM');
+  return parts;
+}
+
+// ---------- rendering: BOM file list ----------
+function renderFileList() {
+  const wrap = document.getElementById('fileListWrap');
+  const models = Object.keys(filesData).sort();
+  if (!models.length) {
+    wrap.innerHTML = '<div class="empty">No BOM files uploaded yet. Click "+ Add BOM file(s)" to get started.</div>';
+    document.getElementById('summaryBox').style.display = 'none';
+    document.getElementById('rankingBox').style.display = 'none';
+    return;
+  }
+  let html = '<table class="filelist"><thead><tr><th>Model</th><th>Parts</th><th>Requirement groups</th><th></th></tr></thead><tbody>';
+  models.forEach(m => {
+    const entry = filesData[m];
+    const groupCount = new Set(entry.rows.map(r => r.group)).size;
+    const safeId = m.replace(/[^a-zA-Z0-9]/g, '_');
+    html += `<tr>
+      <td class="model-name">${m}</td>
+      <td class="model-meta">${entry.rows.length} rows</td>
+      <td class="model-meta">${groupCount} groups</td>
+      <td class="actions">
+        <label class="filebtn small" for="replace_${safeId}">Replace</label>
+        <input type="file" id="replace_${safeId}" data-model="${m}" accept=".xlsx" class="replaceInput">
+        <button class="danger small" data-remove="${m}">Remove</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('.replaceInput').forEach(inp => {
+    inp.addEventListener('change', (e) => handleReplace(e.target.dataset.model, e.target.files[0]));
+  });
+  wrap.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', () => handleRemove(btn.dataset.remove));
+  });
+
+  document.getElementById('summaryBox').style.display = 'block';
+  document.getElementById('rankingBox').style.display = 'block';
+  renderStats();
+  renderModelSelect();
+}
+
+function renderStockInfo() {
+  const el = document.getElementById('stockInfo');
+  const label = document.getElementById('stockLabel');
+  if (!stockMeta) {
+    el.innerHTML = '';
+    label.textContent = '+ Upload stock master';
+    return;
+  }
+  label.textContent = 'Replace stock master';
+  const matched = allRows.length ? new Set(allRows.map(r => r.oel)).size : 0;
+  let matchedCount = 0;
+  new Set(allRows.map(r => r.oel)).forEach(oel => { if (stockMap[oel]) matchedCount++; });
+  el.innerHTML = `<table class="filelist"><tbody><tr>
+      <td class="model-name">${stockMeta.fileName}</td>
+      <td class="model-meta">${stockMeta.count} parts loaded</td>
+      <td class="model-meta">${matchedCount} matched to uploaded BOMs</td>
+      <td class="actions"><button class="danger small" id="removeStockBtn">Remove</button></td>
+    </tr></tbody></table>`;
+  document.getElementById('removeStockBtn').addEventListener('click', handleRemoveStock);
+}
+
+function renderStats() {
+  const models = Object.keys(filesData);
+  const groupSet = new Set(allRows.map(r => r.model + '||' + r.group));
+  const conflictParts = Object.keys(mainModels).filter(oel => {
+    const isAltSomewhere = allRows.some(r => r.oel === oel && r.role.toLowerCase() === 'alt');
+    return isAltSomewhere && mainModels[oel].size > 0;
+  });
+  let zeroMainCount = 0;
+  if (stockMeta) {
+    allRows.forEach(r => { if (r.role.toLowerCase() === 'main' && isZeroStock(r.oel)) zeroMainCount++; });
+  }
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><b>${models.length}</b>models</div>
+    <div class="stat"><b>${groupSet.size}</b>requirement groups</div>
+    <div class="stat"><b>${conflictParts.length}</b>parts: Main in one model, Alt in another</div>
+    ${stockMeta ? `<div class="stat"><b>${zeroMainCount}</b>Main parts at zero stock</div>` : ''}
+  `;
+}
+
+function renderModelSelect() {
+  const sel = document.getElementById('modelSelect');
+  const prev = sel.value;
+  const models = Object.keys(filesData).sort();
+  sel.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (models.includes(prev)) sel.value = prev;
+  renderResults();
+}
+function renderResults() {
+  const model = document.getElementById('modelSelect').value;
+  const summary = document.getElementById('allocSummary');
+  if (!model) { document.getElementById('results').innerHTML = ''; summary.textContent = ''; return; }
+  const qty = getBuildQty();
+  const rows = buildAllocation(model, qty);
+
+  const groups = new Set(rows.map(r => r.group)).size;
+  const shortGroups = rows.filter(r => r.isLast && r.groupShortage > 0).length;
+  if (!stockMeta) {
+    summary.className = 'status err';
+    summary.textContent = 'Upload the stock master to calculate stock, shortage and balance. Showing ideal requirement on the Main part only.';
+  } else {
+    summary.className = 'status ' + (shortGroups ? 'err' : 'ok');
+    summary.textContent = 'Build qty ' + fmtNum(qty) + ' — ' + groups + ' requirement groups, ' +
+      (shortGroups ? shortGroups + ' short on stock (see Shortage column, shown on the last row of each group).' : 'all covered by stock.');
+  }
+
+  let html = '<table class="result"><thead><tr><th>Group</th><th>Priority</th><th>OEL Partcode</th><th>ODM Partcode</th>' +
+             '<th>Part Name</th><th>Description</th><th>Role</th><th class="num">QPS</th><th class="num">Build Quantity Requirement</th>' +
+             '<th class="num">Stock</th><th class="num">Available Requirement</th><th class="num">Shortage</th><th class="num">Balance</th><th>Note</th></tr></thead><tbody>';
+  rows.forEach(r => {
+    const it = r.item;
+    const isMain = it.role.toLowerCase() === 'main';
+    const usedRed = r.flagged && r.alloc > 0;
+    let cls = isMain ? 'main-row' : (usedRed ? 'used-red' : '');
+    if (r.mainZeroStock) cls = 'warn';
+    const notes = noteFor(r);
+    const noteHtml = notes.map(n => {
+      const c = n.startsWith('(Main in') ? 'flagtxt' : 'warntxt';
+      return `<span class="${c}">${n}</span>`;
+    }).join(' ');
+    const stockZero = typeof r.stockNow === 'number' && r.stockNow <= 0;
+    const shortCell = (r.isLast && r.groupShortage !== undefined)
+      ? (r.groupShortage > 0 ? `<td class="num short">${fmtNum(r.groupShortage)}</td>` : `<td class="num dim">0</td>`)
+      : '<td class="num dim"></td>';
+    html += `<tr class="${cls}">
+      <td>${r.group}</td><td>${r.priority}</td><td>${it.oel}</td><td>${it.odm}</td>
+      <td>${it.pname}</td><td>${it.desc}</td><td>${it.role}</td>
+      <td class="num">${fmtNum(r.qps)}</td>
+      <td class="num ${isMain ? 'needed' : 'dim'}">${fmtNum(r.needed)}</td>
+      <td class="num stockval ${stockZero ? 'zero' : ''}">${stockMeta ? fmtNum(r.stockNow) : '—'}</td>
+      <td class="num req">${r.alloc > 0 || isMain ? fmtNum(r.alloc) : '0'}</td>
+      ${shortCell}
+      <td class="num">${stockMeta ? fmtNum(r.balance) : '—'}</td>
+      <td>${noteHtml}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('results').innerHTML = html;
+}
+
+// ---------- BOM file actions ----------
+async function readFileAsWorkbook(file) {
+  const buf = await file.arrayBuffer();
+  return XLSX.read(buf, { type: 'array' });
+}
+
+document.getElementById('addInput').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  e.target.value = '';
+  if (!files.length) return;
+  setStatus('Processing ' + files.length + ' file(s)...');
+  let ok = 0, errs = [];
+  for (const file of files) {
+    try {
+      const wb = await readFileAsWorkbook(file);
+      const entry = parseWorkbook(wb, file.name.replace(/\.xlsx$/i, ''));
+      filesData[entry.model] = entry;
+      const saved = await saveModel(entry);
+      ok++;
+      if (!saved) errs.push(entry.model + ': saved for this session only (storage failed)');
+    } catch (err) {
+      errs.push(file.name + ': ' + err.message);
+    }
+  }
+  rebuildDerived();
+  renderFileList();
+  renderStockInfo();
+  setStatus(errs.length ? errs.join(' | ') : (ok + ' file(s) added.'), errs.length ? 'err' : 'ok');
+  if (ok) showToast(ok + ' BOM file(s) added');
+});
+
+async function handleReplace(oldModel, file) {
+  if (!file) return;
+  setStatus('Replacing ' + oldModel + '...');
+  try {
+    const wb = await readFileAsWorkbook(file);
+    const entry = parseWorkbook(wb, file.name.replace(/\.xlsx$/i, ''));
+    if (entry.model !== oldModel) { await deleteModel(oldModel); delete filesData[oldModel]; }
+    filesData[entry.model] = entry;
+    const saved = await saveModel(entry);
+    rebuildDerived();
+    renderFileList();
+    renderStockInfo();
+    setStatus(saved ? 'Replaced.' : 'Replaced for this session only (storage failed).', saved ? 'ok' : 'err');
+    showToast('Updated ' + entry.model);
+  } catch (err) {
+    setStatus('Replace failed: ' + err.message, 'err');
+  }
+}
+
+async function handleRemove(model) {
+  if (!confirm('Remove ' + model + ' from this tool?')) return;
+  await deleteModel(model);
+  delete filesData[model];
+  rebuildDerived();
+  renderFileList();
+  renderStockInfo();
+  showToast('Removed ' + model);
+}
+
+document.getElementById('modelSelect').addEventListener('change', renderResults);
+document.getElementById('buildQty').addEventListener('input', renderResults);
+document.getElementById('exportBtn').addEventListener('click', exportCSV);
+
+// ---------- stock file actions ----------
+document.getElementById('stockInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  setStockStatus('Processing stock file...');
+  try {
+    const wb = await readFileAsWorkbook(file);
+    const { map, count } = parseStockWorkbook(wb);
+    stockMap = map;
+    stockMeta = { fileName: file.name, count };
+    const saved = await saveStock(file.name, map, count);
+    renderStockInfo();
+    renderStats();
+    renderResults();
+    setStockStatus(saved ? (count + ' parts loaded.') : (count + ' parts loaded (session only — storage failed).'), saved ? 'ok' : 'err');
+    showToast('Stock data loaded');
+  } catch (err) {
+    setStockStatus('Could not process stock file: ' + err.message, 'err');
+  }
+});
+
+async function handleRemoveStock() {
+  if (!confirm('Remove stock data?')) return;
+  await deleteStock();
+  stockMap = {};
+  stockMeta = null;
+  renderStockInfo();
+  renderStats();
+  renderResults();
+  showToast('Stock data removed');
+}
+
+// ---------- CSV export: full BOM, original format + stock / requirement columns ----------
+function exportCSV() {
+  const model = document.getElementById('modelSelect').value;
+  if (!model) return;
+  const entry = filesData[model];
+  const qty = getBuildQty();
+  const rows = buildAllocation(model, qty);
+
+  const headerLabels = entry.headerLabels.slice();
+  const baseWidth = headerLabels.length;
+  headerLabels.push('Build Quantity Requirement (build qty ' + fmtNum(qty) + ')', 'Stock Qty', 'Available Requirement', 'Shortage', 'Balance');
+  const [cNeed, cStock, cReq, cShort, cBal] = [baseWidth, baseWidth + 1, baseWidth + 2, baseWidth + 3, baseWidth + 4];
+  const remarksCol = entry.colMap.remarks;
+
+  const lines = [headerLabels.map(csvEscape).join(',')];
+  const groupCounters = {};
+  rows.forEach(r => {
+    const it = r.item;
+    const raw = it.raw.slice();
+    while (raw.length < headerLabels.length) raw.push('');
+    const isMain = it.role.toLowerCase() === 'main';
+    const newSr = isMain ? String(r.group) : (() => {
+      groupCounters[r.group] = (groupCounters[r.group] || 0) + 1;
+      return r.group + '.' + groupCounters[r.group];
+    })();
+    if (entry.colMap.sr >= 0) raw[entry.colMap.sr] = newSr;
+
+    const note = noteFor(r).map(n => n.replace(/^\(|\)$/g, '')).join('; ');
+    if (note && remarksCol >= 0) {
+      const existing = (raw[remarksCol] || '').toString().trim();
+      raw[remarksCol] = existing ? (existing + '; ' + note) : note;
+    }
+    raw[cNeed] = r.needed;
+    raw[cStock] = stockMeta ? r.stockNow : '';
+    raw[cReq] = r.alloc;
+    raw[cShort] = (r.isLast && r.groupShortage !== undefined) ? r.groupShortage : '';
+    raw[cBal] = stockMeta ? r.balance : '';
+
+    lines.push(raw.map(csvEscape).join(','));
+  });
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = model.replace(/\s+/g, '_') + '_qty' + fmtNum(qty) + '_priority_ranked.csv';
+  a.click();
+}
+
+// ---------- init ----------
+(async function init() {
+  setStatus('Loading saved files...');
+  await loadAllFromStorage();
+  await loadStockFromStorage();
+  rebuildDerived();
+  renderFileList();
+  renderStockInfo();
+  setStatus('');
+})();
+</script>
+</body>
+</html>
